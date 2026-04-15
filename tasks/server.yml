@@ -1,0 +1,80 @@
+---
+- name: "Prepare openvpn gate | check easy-rsa dir"
+  stat:
+    path: "/etc/openvpn/easy-rsa"
+  register: easy_rsa_dir
+
+- name: "Prepare openvpn gate | generate server keys if required"
+  # when: not easy_rsa_dir.stat.exists
+  block:
+
+    - name: copy easy-rsa scripts
+      copy:
+        src: "/usr/share/easy-rsa/"
+        dest: "/etc/openvpn/easy-rsa"
+        remote_src: yes
+
+    - name: copy vars
+      copy:
+        src: "vars"
+        dest: "/etc/openvpn/easy-rsa"
+
+    - name: server | Easyrsa init-pki
+      ansible.builtin.command:
+        cmd: "./easyrsa init-pki"
+        chdir: /etc/openvpn/easy-rsa
+        creates: /etc/openvpn/easy-rsa/pki
+
+    - name: server | Easyrsa build-ca
+      ansible.builtin.command:
+        cmd: "./easyrsa build-ca"
+        chdir: /etc/openvpn/easy-rsa
+        creates: /etc/openvpn/easy-rsa/pki/ca.crt
+
+    - name: server | Easyrsa gen-req HOSTNAME
+      ansible.builtin.command:
+        cmd: "./easyrsa gen-req {{ inventory_hostname }} nopass"
+        chdir: /etc/openvpn/easy-rsa
+        creates: "/etc/openvpn/easy-rsa/pki/private/{{ inventory_hostname }}.key"
+
+    - name: server | Easyrsa gen-dh
+      ansible.builtin.command:
+        cmd: "./easyrsa gen-dh"
+        chdir: /etc/openvpn/easy-rsa
+        creates: "/etc/openvpn/easy-rsa/pki/dh.pem"
+
+    - name: server | Easyrsa sign-req server HOSTNAME
+      ansible.builtin.command:
+        cmd: "./easyrsa sign-req server {{ inventory_hostname }}"
+        chdir: /etc/openvpn/easy-rsa
+        creates: "/etc/openvpn/easy-rsa/pki/issued/{{ inventory_hostname }}.crt"
+
+    - name: server | openvpn --genkey tls-auth pki/ta.key
+      ansible.builtin.command:
+        cmd: "openvpn --genkey tls-auth pki/ta.key"
+        chdir: /etc/openvpn/easy-rsa
+        creates: "/etc/openvpn/easy-rsa/pki/ta.key"
+
+- name: "Prepare openvpn gate | copy openvpn server config"
+  ansible.builtin.template:
+    src: "server.conf.obfs4.j2"
+    dest: "/etc/openvpn/server.conf.obfs4"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify: reload systemd and restart obfs4proxy-openvpn
+
+- name: "Prepare openvpn gate | copy obfs4proxy-openvpn.conf config"
+  ansible.builtin.copy:
+    src: "obfs4proxy-openvpn.conf"
+    dest: "/etc/"
+    owner: "root"
+    group: "root"
+    mode: "0600"
+  notify: reload systemd and restart obfs4proxy-openvpn
+
+- name: "Prepare openvpn gate | generate obfs4_state.cert"
+  ansible.builtin.command:
+    cmd: "obfs4proxy-openvpn --export-cert /var/lib/obfs4proxy-ovpn/obfs4/obfs4_state.cert"
+    creates: "/var/lib/obfs4proxy-ovpn/obfs4/obfs4_state.cert"
+  notify: reload systemd and restart obfs4proxy-openvpn

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Managed by Ansible (ovpn-gate role); see ovpn_up_* variables in defaults.
+
+COMMENT_vpn_ext="ovpn ext open port"
+iptables-save | grep -w "${COMMENT_vpn_ext}"  >/dev/null ||\
+/usr/sbin/iptables -I INPUT  -p tcp -m tcp --dport {{ ovpn_external_tcp_port }}  -j ACCEPT
+

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Managed by Ansible (ovpn-gate role); see ovpn_up_* variables in defaults.
+
+if [ -f /etc/obfs4proxy-openvpn.conf ]
+then
+  MODE=$(awk '{if ($1 == "MODE") print $2}' /etc/obfs4proxy-openvpn.conf)
+
+  if [ "client" = "$MODE" ]
+  then
+    VPNROUTE={{ ovpn_obfs4_gateway_ip }}
+  elif [ "server" = "$MODE" ]
+  then
+    VPNROUTE={{ ovpn_obfs4_client_ip }}
+  else
+    exit 0
+  fi
+{% if ovpn_up_enable_client_policy_routing | default(true) %}
+    ip route add default via $VPNROUTE table {{ ovpn_up_client_route_table }} 2>/dev/null || :
+    CHECK_STR="from {{ ovpn_external_gate_pool_network }}/.* lookup {{ ovpn_up_client_route_table }}"
+    ip rule | grep -q "${CHECK_STR}" ||\
+    ip rule add from {{ ovpn_external_gate_pool_network }}/{{ ovpn_external_gate_pool_netmask }} table {{ ovpn_up_client_route_table }}
+{% endif %}
+
+{% if ovpn_up_masquerade_obfs4 | default(true) %}
+    OVPN_OBFS4_DEV="{{ ovpn_obfs4_dev }}"
+    COMMENT_obfs4="{{ ovpn_up_masquerade_obfs4_comment | default('ovpn obfs4 MASQUERADE') }}"
+    iptables-save | grep -q -w "${COMMENT_obfs4}" || \
+    iptables -t nat -A POSTROUTING -o "${OVPN_OBFS4_DEV}" -m comment --comment "${COMMENT_obfs4}" -j MASQUERADE
+
+    COMMENT_obfs4_forward="{{ ovpn_up_masquerade_obfs4_forward_comment | default('ovpn obfs4 forward') }}"
+    iptables-save | grep -q -w "${COMMENT_obfs4_forward}_o" || \
+    iptables -I FORWARD -o "${OVPN_OBFS4_DEV}" -m comment --comment "${COMMENT_obfs4_forward}_o" -j ACCEPT
+    iptables-save | grep -q -w "${COMMENT_obfs4_forward}_i" || \
+    iptables -I FORWARD -i "${OVPN_OBFS4_DEV}" -m comment --comment "${COMMENT_obfs4_forward}_i" -j ACCEPT
+{% endif %}
+
+{% if ovpn_up_masquerade_default_route | default(true) %}
+  EXT_DEV=$(ip route show default | awk '{print $5}')
+  COMMENT_default="{{ ovpn_up_masquerade_default_comment_prefix | default('ovpn MASQUERADE') }} $EXT_DEV MASQUERADE"
+  iptables-save | grep -q -w "${COMMENT_default}" ||\
+  iptables -t nat -A POSTROUTING -o $EXT_DEV -m comment --comment "${COMMENT_default}" -j MASQUERADE
+{% endif %}
+
+fi

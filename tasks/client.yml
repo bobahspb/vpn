@@ -1,0 +1,104 @@
+---
+- name: "Prepare openvpn gate | copy openvpn client config"
+  ansible.builtin.template:
+    src: "client.conf.obfs4.j2"
+    dest: "/etc/openvpn/client.conf.obfs4"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify: reload systemd and restart obfs4proxy-openvpn
+
+- name: "Prepare openvpn gate | generate client keys"
+  ansible.builtin.command:
+    cmd: "./easyrsa gen-req {{ inventory_hostname }} nopass"
+    chdir: /etc/openvpn/easy-rsa
+    creates: "/etc/openvpn/easy-rsa/pki/private/{{ inventory_hostname }}.key"
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+
+- name: "Prepare openvpn gate | generate client certs"
+  ansible.builtin.command:
+    cmd: "./easyrsa sign-req client {{ inventory_hostname }}"
+    chdir: /etc/openvpn/easy-rsa
+    creates: "/etc/openvpn/easy-rsa/pki/issued/{{ inventory_hostname }}.crt"
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+
+- name: "Prepare openvpn gate | create directory for openvpn keys"
+  ansible.builtin.file:
+    path: "/etc/openvpn/client-keys"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: "0700"
+
+- name: "Prepare openvpn gate | copy CA to var"
+  ansible.builtin.slurp:
+    src: "/etc/openvpn/easy-rsa/pki/ca.crt"
+  register: remote_ca_full
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+
+- name: "Prepare openvpn gate | write CA to file"
+  ansible.builtin.copy:
+    content: "{{ remote_ca_full.content | b64decode }}"
+    dest: "/etc/openvpn/client-keys/ca.crt"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+
+- name: "Prepare openvpn gate | copy TA to var"
+  ansible.builtin.slurp:
+    src: "/etc/openvpn/easy-rsa/pki/ta.key"
+  register: remote_ta_full
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+
+- name: "Prepare openvpn gate | write TA to file"
+  ansible.builtin.copy:
+    content: "{{ remote_ta_full.content | b64decode }}"
+    dest: "/etc/openvpn/client-keys/ta.key"
+    owner: "root"
+    group: "root"
+    mode: "0600"
+
+- name: "Prepare openvpn gate | copy client key to var"
+  ansible.builtin.slurp:
+    src: "/etc/openvpn/easy-rsa/pki/private/{{ inventory_hostname }}.key"
+  register: remote_key_full
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+
+- name: "Prepare openvpn gate | write client key to file"
+  ansible.builtin.copy:
+    content: "{{ remote_key_full.content | b64decode }}"
+    dest: "/etc/openvpn/client-keys/{{ inventory_hostname }}.key"
+    owner: "root"
+    group: "root"
+    mode: "0600"
+
+- name: "Prepare openvpn gate | copy client cert to var"
+  ansible.builtin.slurp:
+    src: "/etc/openvpn/easy-rsa/pki/issued/{{ inventory_hostname }}.crt"
+  register: remote_cert_full
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+
+- name: "Prepare openvpn gate | write client cert to file"
+  ansible.builtin.copy:
+    content: "{{ remote_cert_full.content | b64decode }}"
+    dest: "/etc/openvpn/client-keys/{{ inventory_hostname }}.crt"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify: reload systemd and restart obfs4proxy-openvpn
+
+- name: "Prepare openvpn gate | get CLIENT_REMOTE_CERT for OBFS4 client"
+  ansible.builtin.slurp:
+    src: "/var/lib/obfs4proxy-ovpn/obfs4/obfs4_state.cert"
+  delegate_to: "{{ groups['ovpn_gate'][0] }}"
+  register: obfs_server_cert
+
+- name: "Prepare openvpn gate | setup obfs4proxy-openvpn.conf for client"
+  ansible.builtin.template:
+    src: "obfs4proxy-openvpn.conf_client.j2"
+    dest: "/etc/obfs4proxy-openvpn.conf"
+    owner: "root"
+    group: "root"
+    mode: "0600"
+  notify: reload systemd and restart obfs4proxy-openvpn
+

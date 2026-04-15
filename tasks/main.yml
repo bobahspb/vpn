@@ -1,0 +1,98 @@
+---
+- name: "Prepare openvpn gate | resolve role mode"
+  ansible.builtin.set_fact:
+    ovpn_gate_is_server: "{{ ((ovpn_gate_role_mode == 'server') or (ovpn_gate_role_mode == 'auto' and inventory_hostname == groups['ovpn_gate'][0])) | bool }}"
+    ovpn_gate_is_client: "{{ ((ovpn_gate_role_mode == 'client') or (ovpn_gate_role_mode == 'auto' and (groups['ovpn_gate'] | length > 1) and inventory_hostname == groups['ovpn_gate'][1])) | bool }}"
+    ovpn_gate_manage_obfs4_service: "{{ ((ovpn_gate_role_mode == 'server') or (ovpn_gate_role_mode == 'client') or (ovpn_gate_role_mode == 'auto' and ((groups['ovpn_gate'] | length > 0 and inventory_hostname == groups['ovpn_gate'][0]) or (groups['ovpn_gate'] | length > 1 and inventory_hostname == groups['ovpn_gate'][1])))) | bool }}"
+
+- name: "Prepare openvpn gate | peer source IP for obfs4 iptables (inventory peer ansible_host)"
+  ansible.builtin.set_fact:
+    ovpn_obfs4_peer_source_ip: "{{ hostvars[_ovpn_obfs_peer]['ansible_host'] | default(_ovpn_obfs_peer) }}"
+  vars:
+    _ovpn_obfs_peer: >-
+      {{ (groups['ovpn_gate'] | length > 1 and inventory_hostname == groups['ovpn_gate'][0])
+      | ternary(groups['ovpn_gate'][1], (groups['ovpn_gate'] | length > 1 and inventory_hostname == groups['ovpn_gate'][1]) | ternary(groups['ovpn_gate'][0], '')) }}
+  when:
+    - ovpn_obfs4_peer_source_ip | default('') | length == 0
+    - _ovpn_obfs_peer | length > 0
+
+- name: "Prepare openvpn gate | obfs4 addressing from pool network"
+  ansible.builtin.set_fact:
+    ovpn_obfs4_gateway_ip: "{{ ovpn_obfs4_pool_network | ovpn_ipv4_offset(1) }}"
+    ovpn_obfs4_client_ip: "{{ ovpn_obfs4_pool_network | ovpn_ipv4_offset(2) }}"
+
+- name: "Prepare openvpn gate | Install requrements"
+  ansible.builtin.apt:
+    name:
+      - openvpn
+      - easy-rsa
+      - obfs4proxy
+      - whois
+      - fail2ban
+    state: present
+    update_cache: true
+
+- name: "Prepare openvpn gate | Create obfs4-ovpn user"
+  ansible.builtin.user:
+    name: "obfs4-ovpn"
+    password: "*"
+    home: "/var/lib/obfs4proxy-ovpn"
+    create_home: yes
+    system: true
+    shell: "/usr/sbin/nologin"
+
+- name: "Prepare openvpn gate | copy obfs4proxy-openvpn script"
+  ansible.builtin.copy:
+    src: "obfs4proxy-openvpn"
+    dest: "/usr/local/bin/"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  notify: reload systemd and restart obfs4proxy-openvpn
+
+- name: "Prepare openvpn gate | server-related tasks"
+  ansible.builtin.include_tasks: "server.yml"
+  when: ovpn_gate_is_server
+
+- name: "Prepare openvpn gate | client-related tasks"
+  ansible.builtin.include_tasks: "client.yml"
+  when: ovpn_gate_is_client
+
+- name: "Prepare openvpn gate | external OpenVPN (TCP server)"
+  ansible.builtin.include_tasks: "external-tcp-server.yml"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | install vpn-obfs-up.sh for openvpn"
+  ansible.builtin.template:
+    src: "vpn-obfs-up.sh.j2"
+    dest: "/usr/local/bin/vpn-obfs-up.sh"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  notify: reload systemd and restart obfs4proxy-openvpn
+
+- name: "Prepare openvpn gate | copy sysctl config"
+  ansible.builtin.copy:
+    src: "60-sysctl-ovpn.conf"
+    dest: "/etc/sysctl.d/"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify: reload sysctl for ovpn gate
+
+- name: "Prepare openvpn gate | setup systemd unit for obfs4proxy-openvpn"
+  ansible.builtin.template:
+    src: "obfs4proxy-openvpn.service.j2"
+    dest: "/etc/systemd/system/obfs4proxy-openvpn.service"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify: reload systemd and restart obfs4proxy-openvpn
+  when: ovpn_gate_manage_obfs4_service | bool
+
+- name: "Prepare openvpn gate | enable and start obfs4proxy-openvpn"
+  ansible.builtin.systemd:
+    name: obfs4proxy-openvpn.service
+    enabled: true
+    state: started
+  when: ovpn_gate_manage_obfs4_service | bool

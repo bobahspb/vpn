@@ -1,0 +1,39 @@
+# External OpenVPN — TCP server mode (plain, not obfs4). Managed by Ansible.
+# TLS material is always under /etc/openvpn/ext-tcp-server/ (same on gate and clients).
+
+port {{ ovpn_external_tcp_port }}
+proto tcp
+local {{ ovpn_external_bind_address }}
+
+dev {{ ovpn_external_dev }}
+
+ca /etc/openvpn/ext-tcp-server/ca.crt
+cert /etc/openvpn/ext-tcp-server/{{ ovpn_external_listener_cn }}.crt
+key /etc/openvpn/ext-tcp-server/{{ ovpn_external_listener_cn }}.key
+dh /etc/openvpn/ext-tcp-server/dh.pem
+tls-auth /etc/openvpn/ext-tcp-server/ta.key 0
+
+topology subnet
+server {{ ovpn_external_gate_pool_network }} {{ ovpn_external_gate_pool_netmask }}
+
+ifconfig-pool-persist /var/log/openvpn/ipp-external-tcp-{{ inventory_hostname | replace('.', '-') }}.txt
+
+keepalive 10 120
+
+# cipher AES-256-CBC
+
+user nobody
+persist-key
+persist-tun
+push "redirect-gateway def1"
+
+status /var/log/openvpn/openvpn-status-external-tcp-{{ inventory_hostname | replace('.', '-') }}.log
+log-append /var/log/openvpn/external-tcp-{{ inventory_hostname | replace('.', '-') }}.log
+verb 3
+
+script-security 3
+
+auth-user-pass-verify /usr/local/bin/auth-user-pass-verify.sh via-env
+
+up /usr/local/bin/vpn-ext-up.sh
+

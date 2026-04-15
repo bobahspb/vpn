@@ -1,0 +1,21 @@
+port 1194
+proto tcp
+dev {{ ovpn_obfs4_dev }}
+ca /etc/openvpn/easy-rsa/pki/ca.crt
+cert /etc/openvpn/easy-rsa/pki/issued/{{ inventory_hostname }}.crt
+key /etc/openvpn/easy-rsa/pki/private/{{ inventory_hostname }}.key  # This file should be kept secret
+dh /etc/openvpn/easy-rsa/pki/dh.pem
+topology subnet
+server {{ ovpn_obfs4_pool_network }} {{ ovpn_obfs4_pool_netmask }}
+ifconfig-pool-persist /var/log/openvpn/ipp.txt
+keepalive 10 120
+tls-auth /etc/openvpn/easy-rsa/pki/ta.key 0
+user nobody
+persist-key
+persist-tun
+status /var/log/openvpn/openvpn-status.log
+log-append  /var/log/openvpn/obfs4.log
+verb 3
+explicit-exit-notify 1
+script-security 2
+up /usr/local/bin/vpn-obfs-up.sh

@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenVPN external (TCP server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/openvpn --suppress-timestamps --config {{ ovpn_external_runtime_conf }}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

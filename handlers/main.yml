@@ -1,0 +1,18 @@
+---
+- name: reload sysctl for ovpn gate
+  ansible.builtin.command:
+    cmd: "sysctl -p /etc/sysctl.d/60-sysctl-ovpn.conf"
+
+- name: reload systemd and restart obfs4proxy-openvpn
+  ansible.builtin.systemd:
+    name: obfs4proxy-openvpn.service
+    daemon_reload: true
+    state: restarted
+  when: ovpn_gate_manage_obfs4_service | default(false) | bool
+
+- name: reload systemd and restart openvpn external tcp
+  ansible.builtin.systemd:
+    name: openvpn-external-tcp.service
+    daemon_reload: true
+    state: restarted
+  when: ovpn_external_enable | default(false) | bool

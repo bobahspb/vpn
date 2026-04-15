@@ -1,0 +1,43 @@
+---
+client_keys: []
+
+# auto: first host in group ovpn_gate is server, second is client (inventory order).
+# server | client: force role behavior regardless of groups.
+ovpn_gate_role_mode: auto
+
+# If set (IPv4), obfs4proxy-openvpn.service adds INPUT allow for the other obfs peer
+# before start and removes it on stop (iptables -I / -D). Empty: use peer host ansible_host
+# (ovpn_gate[1] for host [0], ovpn_gate[0] for host [1]).
+ovpn_obfs4_peer_source_ip: ""
+
+# Obfs4 OpenVPN tunnel network (must match server.conf.obfs4 "server" directive).
+# ovpn_obfs4_gateway_ip / ovpn_obfs4_client_ip are set as host facts: pool_network+1 and +2.
+ovpn_obfs4_pool_network: "172.27.0.0"
+ovpn_obfs4_pool_netmask: "255.255.255.0"
+ovpn_obfs4_dev: tap_obfs4
+
+ovpn_up_enable_client_policy_routing: true
+ovpn_up_client_route_table: 27
+
+ovpn_up_masquerade_obfs4: true
+ovpn_up_masquerade_obfs4_comment: "ovpn tap_obfs4 MASQUERADE"
+ovpn_up_masquerade_obfs4_forward_comment: "ovpn tap_obfs4 forward"
+
+ovpn_up_masquerade_default_route: true
+ovpn_up_masquerade_default_comment_prefix: "ovpn MASQUERADE"
+
+# External OpenVPN: plain TCP server on each obfs peer (first two hosts in ovpn_gate).
+# Separate PKI per host: /etc/openvpn/easy-rsa-ext-tcp/. Obfs4 keeps /etc/openvpn/easy-rsa/ on the CA host only.
+# Staged runtime: /etc/openvpn/ext-tcp-server/. Per-host ext-tcp CA signs that host's listener + generate_ovpn.sh users.
+ovpn_external_enable: true
+ovpn_external_tcp_port: 1443
+ovpn_external_bind_address: "0.0.0.0"
+ovpn_external_dev: tun_ext
+ovpn_external_server_conf_path: "/etc/openvpn/server-external-tcp.conf"
+# External TCP VPN pool (independent from ovpn_obfs4_pool_*). Override per host in host_vars if both peers share a subnet.
+ovpn_external_gate_pool_network: "172.28.0.0"
+ovpn_external_gate_pool_netmask: "255.255.255.0"
+ovpn_external_ext_tcp_cn_suffix: "-ext-tcp"
+
+# If set, gate writes /etc/openvpn/ovpn-external-remote so generate_ovpn.sh CLIENTNAME works without arg2/OVPN_REMOTE.
+ovpn_generate_ovpn_default_remote: ""

@@ -1,0 +1,21 @@
+client
+dev {{ ovpn_obfs4_dev }}
+proto tcp
+remote {{ hostvars[groups['ovpn_gate'][0]]['ansible_default_ipv4']['address'] }} 8443
+socks-proxy-retry
+resolv-retry infinite
+nobind
+user nobody
+group obfs4-ovpn
+persist-key
+persist-tun
+ca /etc/openvpn/client-keys/ca.crt
+cert /etc/openvpn/client-keys/{{ inventory_hostname }}.crt
+key /etc/openvpn/client-keys/{{ inventory_hostname }}.key
+remote-cert-tls server
+tls-auth /etc/openvpn/client-keys/ta.key 1
+cipher AES-256-CBC
+verb 3
+log-append /var/log/openvpn/client.log
+script-security 2
+up /usr/local/bin/vpn-obfs-up.sh

@@ -1,0 +1,194 @@
+---
+# External TCP OpenVPN on every obfs peer (first two hosts in ovpn_gate).
+# Each host: own CA in /etc/openvpn/easy-rsa-ext-tcp/, runtime under /etc/openvpn/ext-tcp-server/.
+
+- name: "Prepare openvpn gate | ext-tcp PKI and generate_ovpn tooling"
+  when: ovpn_external_enable | bool
+  block:
+
+    - name: "Prepare openvpn gate | ext-tcp PKI | copy easy-rsa"
+      ansible.builtin.copy:
+        src: "/usr/share/easy-rsa/"
+        dest: "/etc/openvpn/easy-rsa-ext-tcp"
+        remote_src: true
+
+    - name: "Prepare openvpn gate | ext-tcp PKI | copy vars"
+      ansible.builtin.copy:
+        src: "vars"
+        dest: "/etc/openvpn/easy-rsa-ext-tcp/vars"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "Prepare openvpn gate | ext-tcp PKI | init-pki"
+      ansible.builtin.command:
+        cmd: "./easyrsa init-pki"
+        chdir: /etc/openvpn/easy-rsa-ext-tcp
+        creates: /etc/openvpn/easy-rsa-ext-tcp/pki
+
+    - name: "Prepare openvpn gate | ext-tcp PKI | build-ca"
+      ansible.builtin.command:
+        cmd: "./easyrsa build-ca"
+        chdir: /etc/openvpn/easy-rsa-ext-tcp
+        creates: /etc/openvpn/easy-rsa-ext-tcp/pki/ca.crt
+
+    - name: "Prepare openvpn gate | ext-tcp PKI | gen-dh"
+      ansible.builtin.command:
+        cmd: "./easyrsa gen-dh"
+        chdir: /etc/openvpn/easy-rsa-ext-tcp
+        creates: /etc/openvpn/easy-rsa-ext-tcp/pki/dh.pem
+
+    - name: "Prepare openvpn gate | ext-tcp PKI | tls-auth key"
+      ansible.builtin.command:
+        cmd: "openvpn --genkey tls-auth pki/ta.key"
+        chdir: /etc/openvpn/easy-rsa-ext-tcp
+        creates: /etc/openvpn/easy-rsa-ext-tcp/pki/ta.key
+
+    - name: "Prepare openvpn gate | default remote for generate_ovpn.sh (optional)"
+      ansible.builtin.template:
+        src: "ovpn-external-remote.j2"
+        dest: "/etc/openvpn/ovpn-external-remote"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      when: (ovpn_generate_ovpn_default_remote | default('') | trim | length) > 0
+
+    - name: "Prepare openvpn gate | remove default remote file when unset"
+      ansible.builtin.file:
+        path: "/etc/openvpn/ovpn-external-remote"
+        state: absent
+      when: (ovpn_generate_ovpn_default_remote | default('') | trim | length) == 0
+
+    - name: "Prepare openvpn gate | install generate_ovpn.sh for external TCP profiles"
+      ansible.builtin.copy:
+        src: "generate_ovpn.sh"
+        dest: "/usr/local/bin/generate_ovpn.sh"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+    - name: "Prepare openvpn gate | install auth-user-pass-verify.sh"
+      ansible.builtin.copy:
+        src: "auth-user-pass-verify.sh"
+        dest: "/usr/local/bin/auth-user-pass-verify.sh"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+- name: "Prepare openvpn gate | external TCP server | listener CN"
+  ansible.builtin.set_fact:
+    ovpn_external_listener_cn: "{{ inventory_hostname }}{{ ovpn_external_ext_tcp_cn_suffix }}"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | key dir"
+  ansible.builtin.file:
+    path: /etc/openvpn/ext-tcp-server
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | gen-req listener (ext-tcp PKI)"
+  ansible.builtin.command:
+    cmd: "./easyrsa gen-req {{ ovpn_external_listener_cn }} nopass"
+    chdir: /etc/openvpn/easy-rsa-ext-tcp
+    creates: "/etc/openvpn/easy-rsa-ext-tcp/pki/private/{{ ovpn_external_listener_cn }}.key"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | sign server cert (ext-tcp PKI)"
+  ansible.builtin.command:
+    cmd: "./easyrsa sign-req server {{ ovpn_external_listener_cn }}"
+    chdir: /etc/openvpn/easy-rsa-ext-tcp
+    creates: "/etc/openvpn/easy-rsa-ext-tcp/pki/issued/{{ ovpn_external_listener_cn }}.crt"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | stage CA to ext-tcp-server"
+  ansible.builtin.copy:
+    src: /etc/openvpn/easy-rsa-ext-tcp/pki/ca.crt
+    dest: /etc/openvpn/ext-tcp-server/ca.crt
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | stage DH to ext-tcp-server"
+  ansible.builtin.copy:
+    src: /etc/openvpn/easy-rsa-ext-tcp/pki/dh.pem
+    dest: /etc/openvpn/ext-tcp-server/dh.pem
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | stage ta.key to ext-tcp-server"
+  ansible.builtin.copy:
+    src: /etc/openvpn/easy-rsa-ext-tcp/pki/ta.key
+    dest: /etc/openvpn/ext-tcp-server/ta.key
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | stage listener cert to ext-tcp-server"
+  ansible.builtin.copy:
+    src: "/etc/openvpn/easy-rsa-ext-tcp/pki/issued/{{ ovpn_external_listener_cn }}.crt"
+    dest: "/etc/openvpn/ext-tcp-server/{{ ovpn_external_listener_cn }}.crt"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | stage listener key to ext-tcp-server"
+  ansible.builtin.copy:
+    src: "/etc/openvpn/easy-rsa-ext-tcp/pki/private/{{ ovpn_external_listener_cn }}.key"
+    dest: "/etc/openvpn/ext-tcp-server/{{ ovpn_external_listener_cn }}.key"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | OpenVPN config"
+  ansible.builtin.template:
+    src: "server-external-tcp.conf.j2"
+    dest: "{{ ovpn_external_server_conf_path }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify: reload systemd and restart openvpn external tcp
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | install vpn-ext-up.sh for openvpn"
+  ansible.builtin.template:
+    src: "vpn-ext-up.sh.j2"
+    dest: "/usr/local/bin/vpn-ext-up.sh"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  notify: reload systemd and restart openvpn external tcp
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | systemd unit"
+  ansible.builtin.template:
+    src: "openvpn-external-tcp.service.j2"
+    dest: "/etc/systemd/system/openvpn-external-tcp.service"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  vars:
+    ovpn_external_runtime_conf: "{{ ovpn_external_server_conf_path }}"
+  notify: reload systemd and restart openvpn external tcp
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP server | enable service"
+  ansible.builtin.systemd:
+    name: openvpn-external-tcp.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: ovpn_external_enable | bool

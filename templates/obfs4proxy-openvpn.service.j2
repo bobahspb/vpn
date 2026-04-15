@@ -1,0 +1,26 @@
+# * NOTE: You MUST first ensure that obfs4proxy-openvpn works in the cli mode,
+# * before setting it up as a service.
+#
+# 1. Adjust the 'ExecStart' line if required
+# 2. Remove the '.sample' suffix and copy the file to '/etc/systemd/system/'
+# 3. Reload systemd configuration: 'systemctl daemon-reload'
+# 4. Start the service: 'systemctl start obfs4proxy-openvpn.service'
+# 5. Optionally check its status: 'systemctl status obfs4proxy-openvpn.service'
+# 6. Enable the service at startup: 'systemctl enable obfs4proxy-openvpn.service'
+
+[Unit]
+Description=obfs4proxy-openvpn service
+After=syslog.target network.target
+
+[Service]
+Type=simple
+{% if ovpn_obfs4_peer_source_ip | default('') | length > 0 %}
+ExecStartPre=/usr/sbin/iptables -I INPUT -s {{ ovpn_obfs4_peer_source_ip }} -j ACCEPT
+ExecStopPost=-/usr/sbin/iptables -D INPUT -s {{ ovpn_obfs4_peer_source_ip }} -j ACCEPT
+{% endif %}
+ExecStart=/usr/local/bin/obfs4proxy-openvpn
+Restart=on-failure
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target
