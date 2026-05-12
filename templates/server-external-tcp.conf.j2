@@ -25,7 +25,7 @@ keepalive 10 120
 user nobody
 persist-key
 persist-tun
-push "redirect-gateway def1"
+client-config-dir /etc/openvpn/ccd-ext-tcp
 
 status /var/log/openvpn/openvpn-status-external-tcp-{{ inventory_hostname | replace('.', '-') }}.log
 log-append /var/log/openvpn/external-tcp-{{ inventory_hostname | replace('.', '-') }}.log

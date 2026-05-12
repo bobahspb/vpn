@@ -89,6 +89,27 @@
     mode: "0700"
   when: ovpn_external_enable | bool
 
+- name: "Prepare openvpn gate | external TCP | client-config-dir (per-user route snippets)"
+  ansible.builtin.file:
+    path: /etc/openvpn/ccd-ext-tcp
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ovpn_external_enable | bool
+
+- name: "Prepare openvpn gate | external TCP | shared route templates for CCD"
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/openvpn/ccd-ext-tcp/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - route-all.conf
+    - route-part.conf
+  when: ovpn_external_enable | bool
+
 - name: "Prepare openvpn gate | external TCP server | gen-req listener (ext-tcp PKI)"
   ansible.builtin.command:
     cmd: "./easyrsa gen-req {{ ovpn_external_listener_cn }} nopass"

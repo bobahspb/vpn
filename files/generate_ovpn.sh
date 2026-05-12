@@ -3,9 +3,10 @@
 # Uses this host's ext-tcp PKI only (/etc/openvpn/easy-rsa-ext-tcp), not obfs4 PKI. Run as root.
 #
 # Usage:
-#   generate_ovpn.sh CLIENTNAME
+#   generate_ovpn.sh CLIENTNAME [route-all]
 #
 # CLIENTNAME is the VPN username: must be unique (not already present in /etc/openvpn/ext-tcp-users).
+# Optional second argument route-all: CCD symlink uses route-all.conf (full tunnel). Default: route-part.conf.
 # Prompts for password; appends CLIENTNAME:sha256crypt_hash to /etc/openvpn/ext-tcp-users for
 # auth-user-pass-verify.sh. Requires mkpasswd (e.g. whois package on Debian/Ubuntu).
 #
@@ -15,7 +16,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 CLIENTNAME" >&2
+  echo "Usage: $0 CLIENTNAME [route-all]" >&2
   exit 1
 }
 
@@ -37,6 +38,11 @@ detect_external_ipv4() {
 
 [[ "${1:-}" ]] || usage
 CLIENTNAME="$1"
+
+if [[ -n "${2:-}" && "$2" != "route-all" ]]; then
+  echo "$0: invalid 2nd argument '$2' (use 'route-all' or omit for split routes)" >&2
+  exit 1
+fi
 
 EXT_TCP_USERS="/etc/openvpn/ext-tcp-users"
 
@@ -102,6 +108,16 @@ fi
 if [[ ! -f "$PKI/issued/${CLIENTNAME}.crt" ]]; then
   ./easyrsa sign-req client "$CLIENTNAME"
 fi
+
+CCD_EXT_TCP="/etc/openvpn/ccd-ext-tcp"
+if [[ "${2:-}" == "route-all" ]]; then
+  _route_file="route-all.conf"
+else
+  _route_file="route-part.conf"
+fi
+[[ -d "$CCD_EXT_TCP" ]] || { echo "$0: directory $CCD_EXT_TCP not found (deploy ovpn-gate external TCP role)" >&2; exit 1; }
+[[ -f "$CCD_EXT_TCP/$_route_file" ]] || { echo "$0: missing $CCD_EXT_TCP/$_route_file" >&2; exit 1; }
+ln -sf "$_route_file" "$CCD_EXT_TCP/$CLIENTNAME"
 
 OUT="${CLIENTNAME}.ovpn"
 umask 077
