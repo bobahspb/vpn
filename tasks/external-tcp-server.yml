@@ -22,25 +22,33 @@
 
     - name: "Prepare openvpn gate | ext-tcp PKI | init-pki"
       ansible.builtin.command:
-        cmd: "./easyrsa init-pki"
+        cmd:
+            - "source ./vars"
+            - "./easyrsa init-pki"
         chdir: /etc/openvpn/easy-rsa-ext-tcp
         creates: /etc/openvpn/easy-rsa-ext-tcp/pki
 
     - name: "Prepare openvpn gate | ext-tcp PKI | build-ca"
       ansible.builtin.command:
-        cmd: "./easyrsa build-ca"
+        cmd: 
+            - "source ./vars"
+            - "./easyrsa build-ca"
         chdir: /etc/openvpn/easy-rsa-ext-tcp
         creates: /etc/openvpn/easy-rsa-ext-tcp/pki/ca.crt
 
     - name: "Prepare openvpn gate | ext-tcp PKI | gen-dh"
       ansible.builtin.command:
-        cmd: "./easyrsa gen-dh"
+        cmd:
+            - "source ./vars"
+            - "./easyrsa gen-dh"
         chdir: /etc/openvpn/easy-rsa-ext-tcp
         creates: /etc/openvpn/easy-rsa-ext-tcp/pki/dh.pem
 
     - name: "Prepare openvpn gate | ext-tcp PKI | tls-auth key"
       ansible.builtin.command:
-        cmd: "openvpn --genkey tls-auth pki/ta.key"
+        cmd:
+            - "source ./vars"
+            - "openvpn --genkey tls-auth pki/ta.key"
         chdir: /etc/openvpn/easy-rsa-ext-tcp
         creates: /etc/openvpn/easy-rsa-ext-tcp/pki/ta.key
 
