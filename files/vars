@@ -1,8 +1,8 @@
 set_var EASYRSA_REQ_COUNTRY    "US"
 set_var EASYRSA_REQ_PROVINCE   "New York"
 set_var EASYRSA_REQ_CITY       "New York"
-set_var EASYRSA_REQ_ORG        "Rarible"
-set_var EASYRSA_REQ_EMAIL      "root@raribe.com"
+set_var EASYRSA_REQ_ORG        "Able"
+set_var EASYRSA_REQ_EMAIL      "root@able.com"
 set_var EASYRSA_REQ_OU         "ovpn gate"
 
 set_var EASYRSA_NO_PASS        1
