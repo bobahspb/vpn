@@ -19,6 +19,12 @@ ovpn_obfs4_dev: tap_obfs4
 ovpn_up_enable_client_policy_routing: true
 ovpn_up_client_route_table: 27
 
+# systemd-networkd flushes foreign ip rules/routes on restart (ManageForeignRoutingPolicyRules
+# defaults to yes), wiping the policy-routing rule from vpn-obfs-up.sh; up script does not re-run
+# on tunnel reconnects (persist-tun), so egress silently falls back to this gate's own uplink.
+# Drop-in /etc/systemd/networkd.conf.d/10-keep-foreign-rules.conf tells networkd to keep them.
+ovpn_networkd_keep_foreign_rules: true
+
 ovpn_up_masquerade_obfs4: true
 ovpn_up_masquerade_obfs4_comment: "ovpn tap_obfs4 MASQUERADE"
 ovpn_up_masquerade_obfs4_forward_comment: "ovpn tap_obfs4 forward"

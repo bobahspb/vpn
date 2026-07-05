@@ -71,6 +71,24 @@
     mode: "0755"
   notify: reload systemd and restart obfs4proxy-openvpn
 
+- name: "Prepare openvpn gate | networkd drop-in dir"
+  ansible.builtin.file:
+    path: /etc/systemd/networkd.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ovpn_networkd_keep_foreign_rules | bool
+
+- name: "Prepare openvpn gate | keep foreign ip rules across networkd restarts"
+  ansible.builtin.copy:
+    src: "networkd-keep-foreign-rules.conf"
+    dest: "/etc/systemd/networkd.conf.d/10-keep-foreign-rules.conf"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  when: ovpn_networkd_keep_foreign_rules | bool
+
 - name: "Prepare openvpn gate | copy sysctl config"
   ansible.builtin.copy:
     src: "60-sysctl-ovpn.conf"
