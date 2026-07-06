@@ -26,6 +26,11 @@ user nobody
 persist-key
 persist-tun
 client-config-dir /etc/openvpn/ccd-ext-tcp
+# easy-rsa 3.0.x in batch mode signs every certificate with the same CN
+# (EASYRSA_REQ_CN default "ChangeMe"), so per-client CCD lookup by CN never matches
+# and pushed routes are lost. Match clients by their auth username instead; this also
+# avoids the duplicate-cn collision when several users share that default CN.
+username-as-common-name
 
 status /var/log/openvpn/openvpn-status-external-tcp-{{ inventory_hostname | replace('.', '-') }}.log
 log-append /var/log/openvpn/external-tcp-{{ inventory_hostname | replace('.', '-') }}.log
