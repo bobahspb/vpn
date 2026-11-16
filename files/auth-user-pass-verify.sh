@@ -21,7 +21,14 @@
 USERFILE="/etc/openvpn/ext-tcp-users"
 METHOD="sha256crypt"
 
-HASH_FILE=$( awk -F: '{if ($1=="'"${username}"'") print $2}' "${USERFILE}" )
+# allow only safe characters: username is used in awk and logged
+if ! [[ "${username}" =~ ^[A-Za-z0-9._-]{1,64}$ ]]
+then
+  echo "ERROR: invalid username"
+  exit 1
+fi
+
+HASH_FILE=$( awk -F: -v user="${username}" '$1 == user {print $2}' "${USERFILE}" )
 if [ -z "${HASH_FILE}" ]
 then
   echo "ERROR: no user $username"
